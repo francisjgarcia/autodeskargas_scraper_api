@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace | default .Values.namespace }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}
+  template:
+    metadata:
+      annotations:
+        rollme: {{ randAlphaNum 5 | quote }}
+      labels:
+        app: {{ .Values.name }}
+    spec:
+      containers:
+        - name: {{ .Values.deployment.container.name }}
+          image: {{ .Values.image.name }}:{{ .Values.image.tag }}
+          ports:
+          - containerPort: {{ .Values.deployment.container.port }}
+          imagePullPolicy: {{ .Values.image.imagePullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.name }}
+            - secretRef:
+                name: {{ .Values.name }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+      imagePullSecrets:
+        - name: {{ .Values.image.pullSecrets }}

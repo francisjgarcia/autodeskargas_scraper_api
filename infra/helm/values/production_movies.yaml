@@ -1,0 +1,26 @@
+name: scrapy-movies
+namespace: production
+
+image:
+  name: ghcr.io/francisjgarcia/autodeskargas_scraper_api
+  tag: latest
+  pullPolicy: Always
+  pullSecrets: ghcr-key
+
+deployment:
+  replicas: 1
+  container:
+    name: scrapy-movies
+    port: 8000
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 60Mi
+  limits:
+    cpu: 100m
+    memory: 200Mi
+
+service:
+  type: ClusterIP
+  port: 8000

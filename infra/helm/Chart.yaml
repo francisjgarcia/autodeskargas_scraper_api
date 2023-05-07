@@ -1,0 +1,6 @@
+apiVersion: v2
+name: scrapy
+description: API scraper for forums which are posted movies and series in Spanish. The scraper is written in Python and uses Scrapy to parse the HTML and extract the data. The API is written in Django and uses Django REST Framework to expose the data.
+type: application
+version: 1.0.0
+appVersion: 1.0.0

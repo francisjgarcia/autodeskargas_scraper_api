@@ -1,0 +1,45 @@
+version: '3.8'
+services:
+  autodeskargas_scraper_movies:
+    container_name: autodeskargas_scraper_movies
+    image: ${SCRAPER_MOVIES_IMAGE_NAME:-autodeskargas_scraper_movies}:latest
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile
+    ports:
+      - ${SCRAPER_MOVIES_EXPOSE_PORT:-8000}:8000
+    volumes:
+      - ../../app:/usr/src/app
+    env_file:
+      - ../../app/.env
+    environment:
+      - SCRAPY_TYPE=movies
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 100M
+    restart: on-failure:5
+
+  autodeskargas_scraper_series:
+    container_name: autodeskargas_scraper_series
+    image: ${SCRAPER_SERIES_IMAGE_NAME:-autodeskargas_scraper_series}:latest
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile
+    ports:
+      - ${SCRAPER_SERIES_EXPOSE_PORT:-8001}:8000
+    volumes:
+      - ../../app:/usr/src/app
+    env_file:
+      - ../../app/.env
+    environment:
+      - SCRAPY_TYPE=series
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+        reservations:
+          memory: 100M
+    restart: on-failure:5

@@ -1,0 +1,7 @@
+configmap:
+  DEBUG: 'True' # True or False
+  ALLOWED_HOSTS: '*' # Allowed hosts
+  SCRAPY_TYPE: movies # movies or series
+  BASE_URL: https://descargasdd.org # Base url
+  WEB_USER: username # Username
+  SCRAPY_ALWAYS: 'True' # True or False

@@ -1,0 +1,176 @@
+name: Build and Deploy to Kubernetes
+
+on:
+  push:
+    branches:
+      - development
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: .
+
+jobs:
+  setup:
+    name: Obtaining repository name and tag version
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}
+    steps:
+      - name: Use repository
+        uses: actions/checkout@v3
+      - name: Upload repository
+        uses: actions/upload-artifact@v3
+        with:
+          name: repository
+          path: |
+            ${{ github.workspace }}/app
+            ${{ github.workspace }}/infra
+            ${{ github.workspace }}/.dockerignore
+
+  build:
+    name: Building docker image
+    needs: [setup]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}
+    steps:
+      - name: Download repository
+        uses: actions/download-artifact@v3
+        with:
+          name: repository
+      - name: Login to GitHub Packages
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_PAT }}
+      - name: Get image tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo IMAGE_TAG=$(echo "${GITHUB_REF##*/}" | cut -c1-) >> $GITHUB_ENV
+      - name: Build and push image to GitHub Packages
+        uses: docker/build-push-action@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          push: true
+          file: ./infra/docker/Dockerfile
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ github.repository }}:latest
+      - name: Build and push image to GitHub Packages
+        uses: docker/build-push-action@v4
+        if: (github.ref == 'refs/heads/development')
+        with:
+          push: true
+          file: ./infra/docker/Dockerfile
+          tags: ghcr.io/${{ github.repository }}:development
+
+  release:
+    name: Creating release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: "Determine tag"
+        run: "echo \"RELEASE_TAG=${GITHUB_REF#refs/tags/}\" >> $GITHUB_ENV"
+      - name: "Create release"
+        uses: "actions/github-script@v6"
+        with:
+          github-token: "${{ secrets.GHCR_PAT }}"
+          script: |
+            try {
+              const response = await github.rest.repos.createRelease({
+                draft: false,
+                generate_release_notes: true,
+                name: process.env.RELEASE_TAG,
+                owner: context.repo.owner,
+                prerelease: false,
+                repo: context.repo.repo,
+                tag_name: process.env.RELEASE_TAG,
+              });
+
+              core.exportVariable('RELEASE_ID', response.data.id);
+              core.exportVariable('RELEASE_UPLOAD_URL', response.data.upload_url);
+            } catch (error) {
+              core.setFailed(error.message);
+            }
+
+  deploy_movies:
+    name: Deploying movies microservice
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}
+    steps:
+      - name: Download repository
+        uses: actions/download-artifact@v3
+        with:
+          name: repository
+      - name: Create kube config
+        run: |
+          mkdir -p $HOME/.kube/
+          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+      - name: Install helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Lint helm charts
+        run: helm lint ./infra/helm/ -f ./infra/helm/values/${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}_movies.yaml
+      - name: Deploy
+        run: |
+          helm upgrade \
+          --install \
+          --atomic \
+          --timeout 2m \
+          scrapy-movies ./infra/helm/ \
+          -f ./infra/helm/values/${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}_movies.yaml \
+          --kube-context autodeskargas \
+          --namespace ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }} \
+          --create-namespace \
+          --set image.tag=${GITHUB_REF##*/} \
+          --set secret.SECRET_KEY=${{ secrets.SECRET_KEY }} \
+          --set secret.WEB_PASSWORD=${{ secrets.WEB_PASSWORD }}
+
+  deploy_series:
+    name: Deploying series microservice
+    needs: [setup, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}
+    steps:
+      - name: Download repository
+        uses: actions/download-artifact@v3
+        with:
+          name: repository
+      - name: Create kube config
+        run: |
+          mkdir -p $HOME/.kube/
+          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+      - name: Install helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Lint helm charts
+        run: helm lint ./infra/helm/ -f ./infra/helm/values/${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}_series.yaml
+      - name: Deploy
+        run: |
+          helm upgrade \
+          --install \
+          --atomic \
+          --timeout 2m \
+          scrapy-series ./infra/helm/ \
+          -f ./infra/helm/values/${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}_series.yaml \
+          --kube-context autodeskargas \
+          --namespace ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }} \
+          --create-namespace \
+          --set image.tag=${GITHUB_REF##*/} \
+          --set secret.SECRET_KEY=${{ secrets.SECRET_KEY }} \
+          --set secret.WEB_PASSWORD=${{ secrets.WEB_PASSWORD }}
