@@ -17,7 +17,7 @@ defaults:
 
 jobs:
   setup:
-    name: Obtaining repository name and tag version
+    name: Obtaining repository
     runs-on: ubuntu-latest
     environment:
       name: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/development' && 'development' || '' }}
@@ -90,7 +90,7 @@ jobs:
               const response = await github.rest.repos.createRelease({
                 draft: false,
                 generate_release_notes: true,
-                name: process.env.RELEASE_TAG,
+                name: Release process.env.RELEASE_TAG,
                 owner: context.repo.owner,
                 prerelease: false,
                 repo: context.repo.repo,
