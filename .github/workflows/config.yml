@@ -90,7 +90,7 @@ jobs:
               const response = await github.rest.repos.createRelease({
                 draft: false,
                 generate_release_notes: true,
-                name: Release process.env.RELEASE_TAG,
+                name: "Release " + process.env.RELEASE_TAG,
                 owner: context.repo.owner,
                 prerelease: false,
                 repo: context.repo.repo,
